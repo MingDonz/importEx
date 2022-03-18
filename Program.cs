@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.IO;
 using System.Text;
+using ExcelImport.Models;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Office.Interop.Excel;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
@@ -15,8 +17,10 @@ namespace ExcelImport
     {
         static void Main(string[] args)
         {
-            List<Phone> phones = new List<Phone>();
+            var cs = @"Data Source=(LocalDb);Initial Catalog=dbo;Integrated Security=True";
+            SqlConnection conn = new SqlConnection(cs);
 
+            List<Phone> phones = new List<Phone>();
             FileStream fs = new FileStream(@"E:\testwb.xlsx", FileMode.Open);
             XSSFWorkbook wb = new XSSFWorkbook(fs);
             ISheet sheet = wb.GetSheetAt(0);
@@ -42,11 +46,8 @@ namespace ExcelImport
                 // tăng index khi lấy xong
                 rowIndex++;
             }
-
-            var cs = @"Data Source=(LocalDb);Initial Catalog=dbo;Integrated Security=True";
-            SqlConnection conn = new SqlConnection(cs);
-
-            SqlCommand cmd = new SqlCommand(@"CREATE TABLE [dbo].[f_device_install](
+           
+                SqlCommand cmd = new SqlCommand(@"CREATE TABLE [dbo].[f_device_install](
 	            [Id] [int] IDENTITY(1,1) NOT NULL,
 	            [date] [datetime] NOT NULL,
 	            [date_key] [nvarchar](8) NOT NULL,
@@ -65,26 +66,29 @@ namespace ExcelImport
 
             string insertSt = @"INSERT INTO dbo.f_device_install (Id, date, date_key, android_install, iOS_install, android_uninstall, iOS_uninstall) 
                                     VALUES (@Id, @date, @date_key, @android_install, @iOS_install, @android_uninstall, @iOS_uninstall);";
+            var command = new SqlCommand(insertSt);
             foreach (var items in phones)
             {
-                using (SqlConnection con = new SqlConnection(cs))
-                {
 
-                    var command = new SqlCommand(insertSt, conn);
-
-                    command.Parameters.AddWithValue("@Id", (SqlDbType)items.Id);
-                    command.Parameters.AddWithValue("@date_key", items.DateKey);
-                    command.Parameters.AddWithValue("@android_install", (SqlDbType)items.android_Install);
-                    command.Parameters.AddWithValue("@iOS_install", (SqlDbType)items.iOS_Install);
-                    command.Parameters.AddWithValue("@android_uninstall", (SqlDbType)items.android_Uninstall);
-                    command.Parameters.AddWithValue("@iOS_uninstall", (SqlDbType)items.iOS_Uninstall);
-                    con.Open();
-                    command.ExecuteNonQuery();
-                }
-
-
+                command.Parameters.AddWithValue("@Id", (SqlDbType)items.Id);
+                command.Parameters.AddWithValue("@date_key", items.DateKey);
+                command.Parameters.AddWithValue("@android_install", (SqlDbType)items.android_Install);
+                command.Parameters.AddWithValue("@iOS_install", (SqlDbType)items.iOS_Install);
+                command.Parameters.AddWithValue("@android_uninstall", (SqlDbType)items.android_Uninstall);
+                command.Parameters.AddWithValue("@iOS_uninstall", (SqlDbType)items.iOS_Uninstall);
+                conn.Open();
+                cmd.ExecuteNonQuery();
+            }
+            using (var context = new PhoneContext())
+            {
+                context.BulkInsert(phones);
             }
         }
+
+
+
+
+
         public class Phone
         {
             public int Id { get; set; }
@@ -98,7 +102,22 @@ namespace ExcelImport
             public string CreatedBy { get; set; }
             public DateTime UpdatedAt { get; set; }
             public string UpdateBy { get; set; }
+
         }
-       
+        class PhoneContext : DbContext
+        {
+            public DbSet<Phone> Phones { get; set; }
+
+            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            {
+                optionsBuilder.UseSqlServer(@"Data Source=LocalDb;Initial Catalog=Db;Integrated Security=True");
+                base.OnConfiguring(optionsBuilder);
+            }
+
+            internal void BulkInsert(List<Phone> phones)
+            {
+                throw new NotImplementedException();
+            }
+        }
     }
 }
